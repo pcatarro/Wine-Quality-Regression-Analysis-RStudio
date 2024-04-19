@@ -1,0 +1,247 @@
+---
+title: "Wine Quality Regression Analysis"
+author:
+  - name: Diogo Pimenta - nº 20230498
+  - name: João Maia - nº 20230746
+  - name: Pedro Catarro - nº 20230463
+  - name: Pedro Luis - nº 20230797
+affiliation:
+  - num: 1
+    address: Statistics for Data Science, NOVA IMS
+column_numbers: 3
+output:
+  posterdown::posterdown_html:
+    self_contained: false
+    pdf_options:
+      latex_engine: xelatex
+      citation_package: natbib
+      keep_tex: true
+      template: null
+      toc: false
+      toc_depth: 3
+      number_sections: false
+      fig_caption: true
+      includes:
+        in_header: null
+        before_body: null
+        after_body: null
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Introduction
+
+The wine industry is experiencing significant growth due to the increasing popularity of social drinking. However, the current certification process, relying on human experts and physicochemical tests, is time-consuming and costly. The subjective nature of wine appreciation and variability in opinions among tasters further complicate the process. This project seeks to identify key indicators of wine quality by examining the relationship between human tasting preferences and physicochemical properties. The goal is to enhance and streamline the certification and quality assessment processes in the red wine market.
+
+# Research Question
+"How do different physicochemical properties, such as acidity, sulfur content, and alcohol, relate to the quality of wine?"
+
+
+# Methods
+
+In our group project, we undertook a comprehensive regression analysis on a cross-sectional dataset to explore the relationships between various  properties and wine quality. We began with constructing a Linear Regression Model, which served as the foundation for predicting wine quality based on a range of predictor variables. To diagnose potential issues related to heteroscedasticity, we applied both the Breusch-Pagan Test and the White Test, with the former assessing constant variance in residuals and the latter investigating patterns involving squared and interaction terms. The RESET Test was utilized to evaluate the potential enhancement of our model by incorporating non-linear terms. In response to concerns related to varying residuals' variance, Robust Estimation techniques were collaboratively integrated.
+
+
+# Results
+
+```{r table, echo=FALSE, results='asis', warning=FALSE, fig.cap='Figure 1', message=FALSE}
+# Load the required package
+# install.packages("broom")
+library(broom)
+library(tidyverse)
+
+dados <- read.csv("C:/Users/diogo/OneDrive/Ambiente de Trabalho/oi.csv")
+# Assuming "dados" is your data frame and "modelo" is your linear regression model
+modelo <- lm(quality ~ fixed.acidity + volatile.acidity + citric.acid + 
+              residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + 
+              density + pH + sulphates + alcohol, data = dados)
+
+# Use the tidy function to extract coefficients in tidy format
+tidy_table <- tidy(modelo)
+
+#Add a line for the R^2 value
+tidy_table <- tidy_table %>% add_row(term = "R^2", estimate = summary(modelo)$r.squared)
+
+
+# Print the tidy coefficients table
+knitr::kable(tidy_table, caption = "Tidy Coefficients Table")
+
+
+```
+
+The model suggests that volatile acidity, chlorides, free sulfur dioxide, total sulfur dioxide, pH, sulphates, and alcohol significantly influence the response variable.
+
+Volatile acidity, chlorides, total sulfur dioxide, and pH have negative associations with the response variable, meaning an increase in these factors tends to decrease the response.
+
+Free sulfur dioxide, sulphates, and alcohol have positive associations with the response variable, indicating that an increase in these factors is associated with an increase in the response.
+
+The model explains about 36% of the variance in the response variable (moderate fit).
+
+The density is not statistically significant, suggesting it may not be essential in the model.
+
+```{r standard-plot, out.width='50%', fig.align='center', fig.cap='Figure 2', fig.height=5, message=FALSE}
+
+
+dados <- read.csv("C:/Users/diogo/OneDrive/Ambiente de Trabalho/oi.csv")
+
+# Fit the linear regression model
+modelo <- lm(quality ~ fixed.acidity + volatile.acidity + citric.acid + 
+              residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + 
+              density + pH + sulphates + alcohol, data = dados)
+
+
+# Make predictions
+dados$predicted_quality <- predict(modelo)
+
+# Scatter plot
+plot(dados$quality, dados$predicted_quality, 
+     main = "Scatter Plot of Actual vs. Predicted Quality",
+     xlab = "Actual Quality",
+     ylab = "Predicted Quality",
+     col = "blue", # Adjust color if needed
+     pch = 16)     # Adjust point type if needed
+
+#make a regression line
+abline(lm(dados$predicted_quality ~ dados$quality), col = "red")
+
+
+
+```
+Here we can also visualize how well our data fits the regression line. The closer the points are to the line, the better the fit. This supports our previous conclusion that the model has a moderate fit, based on the R^2 value.
+
+
+# Further issues in our model
+We will focus on investigating heteroskedasticity – a condition where the variability of errors is not constant across independent variable levels. This assumption violation can affect the reliability of our model. We will employ employ the Breusch-Pagan Test and the White Test to diagnose potential issues related to heteroscedasticity.
+
+```{r hetero, echo=FALSE, results='asis', warning=FALSE, fig.cap='Figure 3', message=FALSE}
+# Load required libraries
+library(lmtest)
+library(sandwich)
+library(car)
+library(tidyverse)
+
+# Read data
+dados <- read.csv("C:/Users/diogo/OneDrive/Ambiente de Trabalho/oi.csv")
+
+# Fit the linear model
+modelo <- lm(quality ~ fixed.acidity + volatile.acidity + citric.acid + 
+              residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + 
+              density + pH + sulphates + alcohol, data = dados)
+
+# Perform heteroskedasticity tests
+bp_test <- bptest(modelo)
+white_test_full <- bptest(modelo, studentize = FALSE)
+
+# Create a formula for the White Test (Special)
+formula_special <- as.formula(paste("quality ~",
+                                   "fixed.acidity + volatile.acidity + citric.acid +",
+                                   "residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide +",
+                                   "density + pH + sulphates + alcohol +",
+                                   "I(fixed.acidity^2) + I(volatile.acidity^2) + I(citric.acid^2) +",
+                                   "I(residual.sugar^2) + I(chlorides^2) + I(free.sulfur.dioxide^2) +",
+                                   "I(total.sulfur.dioxide^2) + I(density^2) + I(pH^2) +",
+                                   "I(sulphates^2) + I(alcohol^2) +",
+                                   "fixed.acidity:volatile.acidity + fixed.acidity:citric.acid +",
+                                   "fixed.acidity:residual.sugar + fixed.acidity:chlorides +",
+                                   "fixed.acidity:free.sulfur.dioxide + fixed.acidity:total.sulfur.dioxide +",
+                                   "fixed.acidity:density + fixed.acidity:pH + fixed.acidity:sulphates +",
+                                   "fixed.acidity:alcohol + volatile.acidity:citric.acid +",
+                                   "volatile.acidity:residual.sugar + volatile.acidity:chlorides +",
+                                   "volatile.acidity:free.sulfur.dioxide + volatile.acidity:total.sulfur.dioxide +",
+                                   "volatile.acidity:density + volatile.acidity:pH + volatile.acidity:sulphates +",
+                                   "volatile.acidity:alcohol + citric.acid:residual.sugar +",
+                                   "citric.acid:chlorides + citric.acid:free.sulfur.dioxide +",
+                                   "citric.acid:total.sulfur.dioxide + citric.acid:density +",
+                                   "citric.acid:pH + citric.acid:sulphates + citric.acid:alcohol +",
+                                   "residual.sugar:chlorides + residual.sugar:free.sulfur.dioxide +",
+                                   "residual.sugar:total.sulfur.dioxide + residual.sugar:density +",
+                                   "residual.sugar:pH + residual.sugar:sulphates + residual.sugar:alcohol +",
+                                   "chlorides:free.sulfur.dioxide + chlorides:total.sulfur.dioxide +",
+                                   "chlorides:density + chlorides:pH + chlorides:sulphates +",
+                                   "chlorides:alcohol + free.sulfur.dioxide:total.sulfur.dioxide +",
+                                   "free.sulfur.dioxide:density + free.sulfur.dioxide:pH +",
+                                   "free.sulfur.dioxide:sulphates + free.sulfur.dioxide:alcohol +",
+                                   "total.sulfur.dioxide:density + total.sulfur.dioxide:pH +",
+                                   "total.sulfur.dioxide:sulphates + total.sulfur.dioxide:alcohol +",
+                                   "density:pH + density:sulphates + density:alcohol +",
+                                   "pH:sulphates + pH:alcohol + sulphates:alcohol"))
+                                    
+# Fit the model for the White Test (Special)
+modelo_white_special <- lm(formula_special, data = dados)
+
+#create df to store results
+hetero_results <- data.frame(test = c("Breusch-Pagan Test", "White Test (Full)", "White Test (Special)"),
+                             statistic = c(bp_test$statistic, white_test_full$statistic, white_test_full$statistic),
+                             p_value = c(bp_test$p.value, white_test_full$p.value, white_test_full$p.value))
+
+# Display the results table
+knitr::kable(hetero_results, caption = "Heteroskedasticity Test Results")
+
+
+```
+From these results we can conclude that we reject the null hypothesis of homoskedasticity for a 5% significance level. This means that our model is not reliable and we need to use robust estimation techniques to correct for heteroskedasticity.
+
+# Robust Estimation
+This is a technique used to provide reliable parameter estimates when the assumption of homoskedasticity is violated. We will use the robust standard errors to provide reliable standard errors for coefficients.
+
+```{r robust, echo=FALSE, results='asis', warning=FALSE, fig.cap='Figure 4', message=FALSE}
+library(lmtest)
+
+robust_se <- coeftest(modelo, vcov = hccm)
+
+
+#make a table with the coefficients and robust standard errors
+robust_table <- data.frame(coef(modelo), robust_se[,2])
+
+#AND THE P-values
+robust_table$p_value <- 2 * pt(abs(robust_table[,1]/robust_table[,2]), df = Inf, lower.tail = FALSE)
+
+
+# Display the results table
+knitr::kable(robust_table, caption = "Robust Standard Errors")
+
+
+
+                                   
+```
+
+The robust standard errors provide an adjusted measure of the standard error, taking into account the heteroskedasticity in the model. Some coefficients like volatile acidity, chlorides, total sulfur dioxide, sulfates and alcohol, remain highly significant in the model, even with robust standard errors. This might suggest that these variables are important predictors of wine quality. The standard errors coefficients have increased with the robust estimation, which indicates that the standard errors might have been underestimated duo to heteroskedasticity, now providing a more reliable measure of the standard error.
+
+```{r reset-plot, out.width='80%', fig.align='center', fig.cap='Figure 5', fig.height=5, message=FALSE}
+#make a reset test
+RESETreg <- lm(quality ~ fixed.acidity + volatile.acidity + citric.acid +
+                 residual.sugar + chlorides + free.sulfur.dioxide +
+                 total.sulfur.dioxide + density + pH + sulphates + alcohol +
+                 I(fitted(modelo)^2) + I(fitted(modelo)^3),
+               data = dados)
+
+#show the p-value and the R^2
+p_value <- summary(RESETreg)$coef[13,4]
+r_squared <- summary(RESETreg)$r.squared
+
+
+#make a table showing the p-value and R^2
+reset_table <- data.frame(p_value, r_squared)
+
+# Display the results table
+knitr::kable(reset_table, caption = "RESET Test Results")
+
+```
+The p-value from the RESET test assesses whether the model is adequately specified. In the case for the second degree term, the p-value is less than 0.05 indicating that we reject the null hypothesis, suggesting that the model is not correctly specified for. Concluding that including these non-linear terms improves the model.
+
+Furthermore, the improvement in the R^2 value reinforces this conclusion. The increase in R2R2 indicates a better explanation of the variability in the response variable, supporting the idea that including non-linear terms contributes positively to the model's overall specification. Therefore, it is advisable to consider and include non-linear terms for a more accurate representation of the underlying relationships in the data.
+
+# Conclusion
+In conclusion, our findings highlight the importance of considering both linear and non-linear terms in modeling wine quality. The robust estimation techniques addressed heteroskedasticity issues, enhancing the reliability of our results. Future research may explore additional factors or data sources to further refine our understanding of the complex interplay between physicochemical properties and wine quality in the evolving landscape of the wine industry.
+
+# References
+https://www.kaggle.com/datasets/yasserh/wine-quality-dataset
+https://towardsdatascience.com/red-wine-quality-prediction-using-regression-modeling-and-machine-learning-7a3e2c3e1f46
+https://rpubs.com/Sowjanya_G/1137511
+
+
+
+
